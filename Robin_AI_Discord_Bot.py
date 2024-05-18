@@ -68,15 +68,27 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
 # Join & Leave voice channel
 @bot.command(name='join', help='Tells Robin to join the voice channel')
-async def join(ctx):
+async def join(ctx, channel: str = None):
     try:
-        if not ctx.message.author.voice:
-            await ctx.send("You are not connected to a voice channel, I can't follow you there!")
-            return
+        vc = discord.utils.get(ctx.guild.voice_channels, name=channel)
+        
+        if vc is None:
+            if channel is not None:
+                await ctx.send("I can't find that voice channel, I'll follow you instead!")
+            
+            if not ctx.message.author.voice:
+                await ctx.send("You are not connected to a voice channel, I can't follow you there!")
+                return
+            else:
+                vchannel = ctx.message.author.voice.channel
+                await vchannel.connect()
         else:
-            channel = ctx.message.author.voice.channel
-            await ctx.send("Welcome to Penacony! What kind of song are you in the mood for now?")
-        await channel.connect()
+            if ctx.voice_client is not None:
+                await ctx.voice_client.move_to(vc)
+            else:
+                await vc.connect()
+                
+        await ctx.send("Welcome to Penacony! What kind of song are you in the mood for now?")
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
 
