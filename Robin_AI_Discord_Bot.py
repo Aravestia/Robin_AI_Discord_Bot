@@ -240,6 +240,9 @@ async def resume(ctx):
     else:
         await ctx.send("I'm not singing anything at the moment...")
 
-TOKEN = os.environ.get('ROBIN_AI_DISCORD_TOKEN')
-bot.run(TOKEN)
+TOKEN = os.getenv('ROBIN_AI_DISCORD_TOKEN')
+if TOKEN: 
+    bot.run(TOKEN)
+else:
+    print("Error: TOKEN not found.")
 
