@@ -28,8 +28,7 @@ ytdl_format_options = {
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',  # Bind to ipv4 since ipv6 addresses cause issues sometimes
-    'simulate': True,
-    'playlistend': 20
+    'playlistend': 10
 }
 
 ffmpeg_options = {
