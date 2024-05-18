@@ -18,7 +18,7 @@ song_queue = []
 # Configuration for yt-dlp
 ytdl_format_options = {
     'format': 'bestaudio/best',
-    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+    'outtmpl': os.path.expanduser("~" + os.sep + "Downloads" + os.sep + "%(extractor)s-%(id)s-%(title)s.%(ext)s"),
     'restrictfilenames': True,
     'noplaylist': True,
     'nocheckcertificate': True,
@@ -64,7 +64,16 @@ class YTDLSource(discord.PCMVolumeTransformer):
             data = data['entries'][0]
                      
         filename = data['url'] if stream else ytdl.prepare_filename(data)
+        print(filename)
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+
+def delete_files(directory, keyword):
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if keyword in file:
+                file_path = os.path.join(root, file)
+                os.remove(file_path)
+                print(f"Deleted: {file_path}")
 
 # Join & Leave voice channel
 @bot.command(name='join', help='Tells Robin to join the voice channel')
@@ -95,8 +104,12 @@ async def join(ctx, channel: str = None):
 @bot.command(name='leave', help='Make Robin leave the voice channel')
 async def leave(ctx):
     try:
+        global song_queue
+        
+        if ctx.message.guild.voice_client.is_playing():
+            await stop(ctx)
         await ctx.voice_client.disconnect()
-        await ctx.send(f"The concert is over, goodbye & take care! ^.^")
+        await ctx.send("Thank you for attending my concert, have a wonderful night~ 💕")
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
 
@@ -184,9 +197,11 @@ async def play(ctx, *search_query):
                     voice_client.play(player, after=after_playback)
                     
                     await done_event.wait()
+                    delete_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
                     
             if len(song_queue) == 0:
-                await ctx.send("Thank you for attending my concert, have a wonderful night~ 💕")
+                await ctx.send("*Robin has finished singing*")
+                delete_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
         else:
             await ctx.send(f"I'll add this song request to the queue! **Current Queue: {len(song_queue)}**")
     except Exception as e:
