@@ -1,1 +1,1 @@
-worker: python Robin_AI_Discord_Bot.py
+worker: python3 Robin_AI_Discord_Bot.py
