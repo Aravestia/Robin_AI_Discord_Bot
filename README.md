@@ -1,2 +1,1 @@
-I'm Robin AI, based on Robin from Honkai Star Rail. 
-I'm a music bot that plays music in voice channels!
+Discord bot that can queue & play audio from youtube videos in voice channels
