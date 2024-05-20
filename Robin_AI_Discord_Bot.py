@@ -75,6 +75,24 @@ def delete_files(directory, keyword):
                 os.remove(file_path)
                 print(f"Deleted: {file_path}")
 
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user}')
+                
+@bot.event
+async def on_voice_state_update(member, before, after):
+    # Check if the bot is connected to a voice channel
+    if not member.bot and after.channel is None:
+        voice_client = discord.utils.get(bot.voice_clients, guild=member.guild)
+        
+        if voice_client and voice_client.channel == before.channel:
+            if len(before.channel.members) == 1:
+                await asyncio.sleep(5)  # Wait for 5 seconds
+                
+                # Re-check the channel members after waiting
+                if len(before.channel.members) == 1 and bot.user in before.channel.members:
+                    await before.channel.guild.voice_client.disconnect()
+
 # Join & Leave voice channel
 @bot.command(name='join', help='Tells Robin to join the voice channel')
 async def join(ctx, channel: str = None):
@@ -110,6 +128,9 @@ async def leave(ctx):
             await stop(ctx)
         await ctx.voice_client.disconnect()
         await ctx.send("Thank you for attending my concert, have a wonderful night~ 💕")
+        
+        if any(bot.voice_clients):
+            delete_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
 
@@ -197,11 +218,11 @@ async def play(ctx, *search_query):
                     voice_client.play(player, after=after_playback)
                     
                     await done_event.wait()
-                    delete_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
+                    #delete_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
                     
             if len(song_queue) == 0:
                 await ctx.send("*Robin has finished singing*")
-                delete_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
+                #delete_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
         else:
             await ctx.send(f"I'll add this song request to the queue! **Current Queue: {len(song_queue)}**")
     except Exception as e:
