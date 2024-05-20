@@ -87,11 +87,15 @@ async def on_voice_state_update(member, before, after):
         
         if voice_client and voice_client.channel == before.channel:
             if len(before.channel.members) == 1:
-                await asyncio.sleep(5)  # Wait for 5 seconds
+                await asyncio.sleep(10)
                 
                 # Re-check the channel members after waiting
                 if len(before.channel.members) == 1 and bot.user in before.channel.members:
                     await before.channel.guild.voice_client.disconnect()
+                    
+                    time.sleep(5)
+                    if any(bot.voice_clients) == False:
+                        delete_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
 
 # Join & Leave voice channel
 @bot.command(name='join', help='Tells Robin to join the voice channel')
@@ -129,7 +133,8 @@ async def leave(ctx):
         await ctx.voice_client.disconnect()
         await ctx.send("Thank you for attending my concert, have a wonderful night~ 💕")
         
-        if any(bot.voice_clients):
+        time.sleep(5)
+        if any(bot.voice_clients) == False:
             delete_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
