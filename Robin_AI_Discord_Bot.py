@@ -14,6 +14,29 @@ intents.members = True  # Enable this if you need server members intent
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 song_queue = []
+    
+# Check if a file is in use by attempting to open it exclusively.
+# Returns True if the file is in use, False otherwise.
+def is_file_in_use(file_path):
+    try:
+        with open(file_path, 'a'):
+            pass
+        return False
+    except OSError:
+        return True
+
+# Finds all files containing a certain keyword and removes them
+def delete_all_files(directory, keyword):
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if keyword in file:
+                file_path = os.path.join(root, file)
+                
+                if is_file_in_use(file_path):
+                    print(f"File in use, cannot delete: {file_path}")
+                else:
+                    os.remove(file_path)
+                    print(f"Deleted: {file_path}")
   
 # Configuration for yt-dlp
 ytdl_format_options = {
@@ -28,7 +51,7 @@ ytdl_format_options = {
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',  # Bind to ipv4 since ipv6 addresses cause issues sometimes
-    'playlistend': 10
+    'playlistend': 10,
 }
 
 ffmpeg_options = {
@@ -50,7 +73,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
             search_query = f"ytsearch{1}:{search}"
         
         loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(search_query, download=not stream))
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(search_query, download=False))
         
         if 'entries' in data:
             # If it is playlist, append to queue
@@ -64,32 +87,8 @@ class YTDLSource(discord.PCMVolumeTransformer):
             data = data['entries'][0]
                      
         filename = data['url'] if stream else ytdl.prepare_filename(data)
-        print(filename)
+        print(f"File created: {filename}")
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
-
-def is_file_in_use(file_path):
-    """
-    Check if a file is in use by attempting to open it exclusively.
-    Returns True if the file is in use, False otherwise.
-    """
-    try:
-        with open(file_path, 'a'):
-            pass
-        return False
-    except OSError:
-        return True
-
-def delete_all_files(directory, keyword):
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if keyword in file:
-                file_path = os.path.join(root, file)
-                
-                if is_file_in_use(file_path):
-                    print(f"File in use, cannot delete: {file_path}")
-                else:
-                    os.remove(file_path)
-                    print(f"Deleted: {file_path}")
 
 @bot.event
 async def on_ready():
@@ -127,8 +126,8 @@ async def join(ctx, channel: str = None):
                 await ctx.send("You are not connected to a voice channel, I can't follow you there!")
                 return
             else:
-                vchannel = ctx.message.author.voice.channel
-                await vchannel.connect()
+                vc = ctx.message.author.voice.channel
+                await vc.connect()
         else:
             if ctx.voice_client is not None:
                 await ctx.voice_client.move_to(vc)
@@ -136,8 +135,10 @@ async def join(ctx, channel: str = None):
                 await vc.connect()
                 
         await ctx.send("Welcome to Penacony! What kind of song are you in the mood for now?")
+        print(f"Connected to channel: {vc}")
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
+        print(f"Error: {e}")
 
 @bot.command(name='leave', help='Make Robin leave the voice channel')
 async def leave(ctx):
@@ -154,6 +155,7 @@ async def leave(ctx):
             delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
+        print(f"Error: {e}")
 
 # Fun commands
 magic_8ball_list = [
@@ -214,7 +216,7 @@ async def play(ctx, *search_query):
             song_queue.clear()
             return
         except discord.ClientException:
-            None
+            print("Bot is connected to channel.")
         
         search = " ".join(search_query)
         song_queue.append(search)
@@ -248,6 +250,7 @@ async def play(ctx, *search_query):
             await ctx.send(f"I'll add this song request to the queue! **Current Queue: {len(song_queue)}**")
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
+        print(f"Error: {e}")
 
 @bot.command(name='queue', help='Check queue status')
 async def queue(ctx):
