@@ -241,11 +241,11 @@ async def play(ctx, *search_query):
                     voice_client.play(player, after=after_playback)
                     
                     await done_event.wait()
-                    #delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
+                    delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
                     
             if len(song_queue) == 0:
                 await ctx.send("*Robin has finished singing*")
-                #delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
+                delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
         else:
             await ctx.send(f"I'll add this song request to the queue! **Current Queue: {len(song_queue)}**")
     except Exception as e:
