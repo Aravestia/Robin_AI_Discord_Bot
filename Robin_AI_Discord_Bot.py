@@ -73,7 +73,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
             search_query = f"ytsearch{1}:{search}"
         
         loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(search_query, download=False))
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(search_query, download=not stream))
         
         if 'entries' in data:
             # If it is playlist, append to queue
