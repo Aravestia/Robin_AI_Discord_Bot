@@ -67,13 +67,29 @@ class YTDLSource(discord.PCMVolumeTransformer):
         print(filename)
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
-def delete_files(directory, keyword):
+def is_file_in_use(file_path):
+    """
+    Check if a file is in use by attempting to open it exclusively.
+    Returns True if the file is in use, False otherwise.
+    """
+    try:
+        with open(file_path, 'a'):
+            pass
+        return False
+    except OSError:
+        return True
+
+def delete_all_files(directory, keyword):
     for root, dirs, files in os.walk(directory):
         for file in files:
             if keyword in file:
                 file_path = os.path.join(root, file)
-                os.remove(file_path)
-                print(f"Deleted: {file_path}")
+                
+                if is_file_in_use(file_path):
+                    print(f"File in use, cannot delete: {file_path}")
+                else:
+                    os.remove(file_path)
+                    print(f"Deleted: {file_path}")
 
 @bot.event
 async def on_ready():
@@ -95,7 +111,7 @@ async def on_voice_state_update(member, before, after):
                     
                     time.sleep(5)
                     if any(bot.voice_clients) == False:
-                        delete_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
+                        delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
 
 # Join & Leave voice channel
 @bot.command(name='join', help='Tells Robin to join the voice channel')
@@ -135,7 +151,7 @@ async def leave(ctx):
         
         time.sleep(5)
         if any(bot.voice_clients) == False:
-            delete_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
+            delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
 
