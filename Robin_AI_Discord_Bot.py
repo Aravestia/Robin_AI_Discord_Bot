@@ -13,30 +13,20 @@ intents.voice_states = True  # Needed for voice channel join/leave
 intents.members = True  # Enable this if you need server members intent
 
 bot = commands.Bot(command_prefix='!', intents=intents)
-song_queue = []
+song_queue = dict()
     
-# Check if a file is in use by attempting to open it exclusively.
-# Returns True if the file is in use, False otherwise.
-def is_file_in_use(file_path):
-    try:
-        with open(file_path, 'a'):
-            pass
-        return False
-    except OSError:
-        return True
-
 # Finds all files containing a certain keyword and removes them
 def delete_all_files(directory, keyword):
     for root, dirs, files in os.walk(directory):
         for file in files:
             if keyword in file:
                 file_path = os.path.join(root, file)
-                
-                if is_file_in_use(file_path):
-                    print(f"File in use, cannot delete: {file_path}")
-                else:
+                    
+                try:
                     os.remove(file_path)
                     print(f"Deleted: {file_path}")
+                except:
+                    print(f"File in use, cannot delete: {file_path}")
   
 # Configuration for yt-dlp
 ytdl_format_options = {
@@ -67,7 +57,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.url = data.get('url')
 
     @classmethod
-    async def ytdl_search(cls, search,  *, loop=None, stream=False):
+    async def ytdl_search(cls, search, guild, *, loop=None, stream=False):
         search_query = search
         if "https://" not in search:
             search_query = f"ytsearch{1}:{search}"
@@ -80,7 +70,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
             if len(data['entries']) > 1:
                 for i in range(len(data['entries'])):
                     if i > 0:
-                        song_queue.append(data['entries'][i].get('title'))
+                        song_queue[guild].append(data['entries'][i].get('title'))
                         print(data['entries'][i].get('title'))
 
             # Take first item from a playlist or search query
@@ -96,6 +86,8 @@ async def on_ready():
                 
 @bot.event
 async def on_voice_state_update(member, before, after):
+    global song_queue
+    
     # Check if the bot is connected to a voice channel
     if not member.bot and after.channel is None:
         voice_client = discord.utils.get(bot.voice_clients, guild=member.guild)
@@ -106,14 +98,18 @@ async def on_voice_state_update(member, before, after):
                 
                 # Re-check the channel members after waiting
                 if len(before.channel.members) == 1 and bot.user in before.channel.members:
+                    if before.channel.guild.voice_client.is_playing():
+                        await stop(before)
+                    
                     await before.channel.guild.voice_client.disconnect()
+                    song_queue[before.channel.guild.id].clear()
                     
                     time.sleep(5)
                     if any(bot.voice_clients) == False:
                         delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
 
 # Join & Leave voice channel
-@bot.command(name='join', help='Tells Robin to join the voice channel')
+@bot.command(name='join', help='joins the voice channel')
 async def join(ctx, channel: str = None):
     try:
         vc = discord.utils.get(ctx.guild.voice_channels, name=channel)
@@ -140,7 +136,7 @@ async def join(ctx, channel: str = None):
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
         print(f"Error: {e}")
 
-@bot.command(name='leave', help='Make Robin leave the voice channel')
+@bot.command(name='leave', help='leaves the voice channel')
 async def leave(ctx):
     try:
         global song_queue
@@ -181,21 +177,21 @@ magic_8ball_list = [
     "Very doubtful."
 ]
 
-@bot.command(name='hi', help='do !hi (name)')
+@bot.command(name='hi', help='says hi to your friend!')
 async def hi(ctx, *, name: str = None):
     if name == None:
         await ctx.send(f"hi, {ctx.message.author.name}!")
     else:
         await ctx.send(f"hi, {name}!")
     
-@bot.command(name='roll', help='roll a dice')
+@bot.command(name='roll', help='rolls a die')
 async def roll(ctx):
     r = random.randint(1, 6)
     await ctx.send(f"**Aventurine:** *How about a game? Nothing fancy, just a game of dice🎲 to gauge today's luck.*")
     time.sleep(1)
     await ctx.send(f"{ctx.message.author.name}'s roll: **{r}**")
     
-@bot.command(name='8ball', help='ask the magic 8 ball')
+@bot.command(name='8ball', help='asks magic 8 ball a question')
 async def magic_8ball(ctx, *, qn: str = None):
     if qn is not None:
         r = random.randint(0, 19)
@@ -204,71 +200,86 @@ async def magic_8ball(ctx, *, qn: str = None):
         await ctx.send(f"*The magic 8 ball is waiting eagerly...*")
 
 # Music Commands     
-@bot.command(name='play', help='To play song or add song to queue')
+@bot.command(name='play', help='plays song or adds song to queue')
 async def play(ctx, *search_query):
     try:
         global song_queue
+        guild = ctx.message.guild.id
         
         try:
             await ctx.message.author.voice.channel.connect()
         except AttributeError:
             await ctx.send("You are not connected to a voice channel, I can't follow you there!")
-            song_queue.clear()
             return
         except discord.ClientException:
             print("Bot is connected to channel.")
         
-        search = " ".join(search_query)
-        song_queue.append(search)
-        voice_client = ctx.message.guild.voice_client
+        if guild:
+            if guild not in song_queue:
+                song_queue.update({guild : []})
 
-        if not voice_client.is_playing():
-            while len(song_queue) > 0:
-                async with ctx.typing():
-                    done_event = asyncio.Event()
+            print(f"song queue: {song_queue}")
+            
+            search = " ".join(search_query)
+            song_queue[guild].append(search)
+            voice_client = ctx.message.guild.voice_client
 
-                    def after_playback(error):
-                        if error:
-                            print(f'Player error: {error}')
-                        done_event.set()
+            if not voice_client.is_playing():
+                while len(song_queue[guild]) > 0:
+                    async with ctx.typing():
+                        done_event = asyncio.Event()
 
-                    current_song = song_queue[0]
-                    song_queue.pop(0)
-                    
-                    await ctx.send(f"*Robin is preparing to sing~*") 
-                    player = await YTDLSource.ytdl_search(current_song, loop=bot.loop)
-                    await ctx.send(f"Okay, I'm about to sing: **{player.title}**")
-                    voice_client.play(player, after=after_playback)
-                    
-                    await done_event.wait()
+                        def after_playback(error):
+                            if error:
+                                print(f'Player error: {error}')
+                            done_event.set()
+
+                        current_song = song_queue[guild][0]
+                        song_queue[guild].pop(0)
+                        
+                        await ctx.send(f"*Robin is preparing to sing~*") 
+                        player = await YTDLSource.ytdl_search(current_song, guild, loop=bot.loop)
+                        await ctx.send(f"Okay, I'm about to sing: **{player.title}**")
+                        voice_client.play(player, after=after_playback)
+                        
+                        await done_event.wait()
+                        delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
+                        
+                if len(song_queue[guild]) == 0:
+                    await ctx.send("*Robin has finished singing*")
+                    song_queue.pop(guild)
                     delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
-                    
-            if len(song_queue) == 0:
-                await ctx.send("*Robin has finished singing*")
-                delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
-        else:
-            await ctx.send(f"I'll add this song request to the queue! **Current Queue: {len(song_queue)}**")
+            else:
+                await ctx.send(f"I'll add this song request to the queue! **Current Queue: {len(song_queue[guild])}**")
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
         print(f"Error: {e}")
 
-@bot.command(name='queue', help='Check queue status')
+@bot.command(name='queue', help='check queue status')
 async def queue(ctx):
     global song_queue
+    guild = ctx.message.guild.id
     msg = "Songs in queue: \n"
     
-    if len(song_queue) == 0:
+    if len(song_queue[guild]) == 0:
         msg = "No songs in queue."
     
-    for i in range(len(song_queue)):
-        msg = msg + f"**{i + 1}** - {song_queue[i]} \n"
+    for i in range(len(song_queue[guild])):
+        msg = msg + f"**{i + 1}** - {song_queue[guild][i]} \n"
         
     await ctx.send(msg)
+    
+@bot.command(name='~debugqueue')
+async def debug_queue(ctx):
+    global song_queue
+    await ctx.send(song_queue)
 
-@bot.command(name='stop', help='Stops the song')
+@bot.command(name='stop', help='stops song and clears song queue')
 async def stop(ctx):
     global song_queue
-    song_queue.clear()
+    guild = ctx.message.guild.id
+    if guild in song_queue:
+        song_queue.pop(guild)
     
     voice_client = ctx.message.guild.voice_client
     if voice_client.is_paused():
@@ -280,12 +291,14 @@ async def stop(ctx):
     else:
         await ctx.send("I'm not singing anything at the moment...")
         
-@bot.command(name='skip', help='Stops the song')
+@bot.command(name='skip', help='skips the current song')
 async def skip(ctx):
+    global song_queue
+    guild = ctx.message.guild.id
     voice_client = ctx.message.guild.voice_client
     if voice_client.is_playing():
         
-        if len(song_queue) < 1:
+        if len(song_queue[guild]) < 1:
             await ctx.send("Sure, I'll stop singing.")
         else:
             await ctx.send("All right, I'll switch to the next song.")
@@ -293,7 +306,7 @@ async def skip(ctx):
     else:
         await ctx.send("I'm not singing anything at the moment...") 
 
-@bot.command(name='pause', help='This command pauses the song')
+@bot.command(name='pause', help='pauses song')
 async def pause(ctx):
     voice_client = ctx.message.guild.voice_client
     if voice_client.is_playing():
@@ -302,7 +315,7 @@ async def pause(ctx):
     else:
         await ctx.send("I'm not singing anything at the moment...")
 
-@bot.command(name='resume', help='Resumes the song')
+@bot.command(name='resume', help='resumes song')
 async def resume(ctx):
     voice_client = ctx.message.guild.voice_client
     if voice_client.is_paused():
