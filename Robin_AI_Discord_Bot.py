@@ -5,6 +5,7 @@ import asyncio
 import random
 import time
 import os
+import wikipediaapi
 
 intents = discord.Intents.default()
 intents.message_content = True  # Enable this if you need message content intent
@@ -14,6 +15,7 @@ intents.members = True  # Enable this if you need server members intent
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 song_queue = dict()
+wikipedia = wikipediaapi.Wikipedia('Robin_AI_Discord_Bot (https://github.com/Aravestia/Robin_AI_Discord_Bot) discord.py/2.3.2', 'en')
     
 # Finds all files containing a certain keyword and removes them
 def delete_all_files(directory, keyword):
@@ -153,52 +155,6 @@ async def leave(ctx):
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
         print(f"Error: {e}")
 
-# Fun commands
-magic_8ball_list = [
-    "It is certain.",
-    "It is decidedly so.",
-    "Without a doubt.",
-    "Yes, definitely.",
-    "You may rely on it.",
-    "As I see it, yes.",
-    "Most likely.",
-    "Outlook good.",
-    "Yes.",
-    "Signs point to yes.",
-    "Reply hazy, try again.",
-    "Ask again later.",
-    "Better not tell you now.",
-    "Cannot predict now.",
-    "Concentrate and ask again.",
-    "Don't count on it.",
-    "My reply is no.",
-    "My sources say no.",
-    "Outlook not so good.",
-    "Very doubtful."
-]
-
-@bot.command(name='hi', help='says hi to your friend!')
-async def hi(ctx, *, name: str = None):
-    if name == None:
-        await ctx.send(f"hi, {ctx.message.author.name}!")
-    else:
-        await ctx.send(f"hi, {name}!")
-    
-@bot.command(name='roll', help='rolls a die')
-async def roll(ctx):
-    r = random.randint(1, 6)
-    await ctx.send(f"**Aventurine:** *How about a game? Nothing fancy, just a game of dice🎲 to gauge today's luck.*")
-    time.sleep(1)
-    await ctx.send(f"{ctx.message.author.name}'s roll: **{r}**")
-    
-@bot.command(name='8ball', help='asks magic 8 ball a question')
-async def magic_8ball(ctx, *, qn: str = None):
-    if qn is not None:
-        r = random.randint(0, 19)
-        await ctx.send(f"*{magic_8ball_list[r]}*")
-    else:
-        await ctx.send(f"*The magic 8 ball is waiting eagerly...*")
-
 # Music Commands     
 @bot.command(name='play', help='plays song or adds song to queue')
 async def play(ctx, *search_query):
@@ -324,9 +280,69 @@ async def resume(ctx):
     else:
         await ctx.send("I'm not singing anything at the moment...")
 
+# Fun commands
+magic_8ball_list = [
+    "It is certain.",
+    "It is decidedly so.",
+    "Without a doubt.",
+    "Yes, definitely.",
+    "You may rely on it.",
+    "As I see it, yes.",
+    "Most likely.",
+    "Outlook good.",
+    "Yes.",
+    "Signs point to yes.",
+    "Reply hazy, try again.",
+    "Ask again later.",
+    "Better not tell you now.",
+    "Cannot predict now.",
+    "Concentrate and ask again.",
+    "Don't count on it.",
+    "My reply is no.",
+    "My sources say no.",
+    "Outlook not so good.",
+    "Very doubtful."
+]
+
+@bot.command(name='hi', help='says hi to your friend!')
+async def hi(ctx, *, name: str = None):
+    if name == None:
+        await ctx.send(f"hi, {ctx.message.author.name}!")
+    else:
+        await ctx.send(f"hi, {name}!")
+    
+@bot.command(name='roll', help='rolls a die')
+async def roll(ctx):
+    r = random.randint(1, 6)
+    await ctx.send(f"**Aventurine:** *How about a game? Nothing fancy, just a game of dice🎲 to gauge today's luck.*")
+    time.sleep(1)
+    await ctx.send(f"{ctx.message.author.name}'s roll: **{r}**")
+    
+@bot.command(name='8ball', help='asks magic 8 ball a question')
+async def magic_8ball(ctx, *, qn: str = None):
+    if qn is not None:
+        r = random.randint(0, 19)
+        await ctx.send(f"*{magic_8ball_list[r]}*")
+    else:
+        await ctx.send(f"*The magic 8 ball is waiting eagerly...*")
+        
+@bot.command(name='wiki', help='consults wikipedia')
+async def wiki(ctx, *search_query):
+    page = wikipedia.page("_".join(search_query))
+    
+    await ctx.send("**Dan Heng:** *I'll take a look in the archives📖.*")
+    try:
+        if page.exists():
+            await ctx.send(f"{page.summary[0:1000]}... \n\n**Dan Heng:** *Let me know if you need any more help.*")
+        else:
+            await ctx.send("**Dan Heng:** *Sorry, I could not find any info on that topic...*")
+    except Exception as e:
+        await ctx.send(f"Sorry, there is an error with my program: **{e}**")
+        print(f"Error: {e}")  
+
 TOKEN = os.getenv('ROBIN_AI_DISCORD_TOKEN')
 if TOKEN: 
     bot.run(TOKEN)
 else:
-    print("Error: TOKEN not found.")
+    print("Error: TOKEN not found. Make sure env is ROBIN_AI_DISCORD_TOKEN")
 
