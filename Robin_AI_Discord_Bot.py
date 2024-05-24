@@ -13,7 +13,7 @@ intents.guilds = True
 intents.voice_states = True  # Needed for voice channel join/leave
 intents.members = True  # Enable this if you need server members intent
 
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix='--', intents=intents)
 song_queue = dict()
 wikipedia = wikipediaapi.Wikipedia('Robin_AI_Discord_Bot (https://github.com/Aravestia/Robin_AI_Discord_Bot) discord.py/2.3.2', 'en')
     
