@@ -100,15 +100,17 @@ async def on_voice_state_update(member, before, after):
                 
                 # Re-check the channel members after waiting
                 if len(before.channel.members) == 1 and bot.user in before.channel.members:
-                    if before.channel.guild.voice_client.is_playing():
-                        await stop(before)
-                    
-                    await before.channel.guild.voice_client.disconnect()
                     song_queue[before.channel.guild.id].clear()
+                    if before.channel.guild.voice_client.is_playing():
+                        voice_client.stop()
+
+                    await before.channel.guild.voice_client.disconnect()
                     
                     time.sleep(5)
                     if any(bot.voice_clients) == False:
                         delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
+                        
+                    print(f"queue: {song_queue}")
 
 # Join & Leave voice channel
 @bot.command(name='join', help='joins the voice channel')
@@ -201,10 +203,12 @@ async def play(ctx, *search_query):
                         await done_event.wait()
                         delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
                         
+                # If queue is empty after current song has finished playing
                 if len(song_queue[guild]) == 0:
                     await ctx.send("*Robin has finished singing*")
                     song_queue.pop(guild)
                     delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
+                    print(f"queue: {song_queue}")
             else:
                 await ctx.send(f"I'll add this song request to the queue! **Current Queue: {len(song_queue[guild])}**")
     except Exception as e:
@@ -234,15 +238,14 @@ async def debug_queue(ctx):
 async def stop(ctx):
     global song_queue
     guild = ctx.message.guild.id
-    if guild in song_queue:
-        song_queue.pop(guild)
-    
+
     voice_client = ctx.message.guild.voice_client
     if voice_client.is_paused():
         voice_client.resume()
     
     if voice_client.is_playing():
         await ctx.send("Sure, I'll stop singing.")
+        song_queue[guild].clear()
         voice_client.stop()
     else:
         await ctx.send("I'm not singing anything at the moment...")
