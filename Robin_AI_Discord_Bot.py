@@ -6,6 +6,10 @@ import random
 import time
 import os
 import wikipediaapi
+from flask import Flask
+
+app = Flask(__name__)
+MUSIC_FOLDER = os.path.join(app.root_path, 'music-playing')
 
 intents = discord.Intents.default()
 intents.message_content = True  # Enable this if you need message content intent
@@ -17,23 +21,26 @@ bot = commands.Bot(command_prefix='--', intents=intents)
 song_queue = dict()
 wikipedia = wikipediaapi.Wikipedia('Robin_AI_Discord_Bot (https://github.com/Aravestia/Robin_AI_Discord_Bot) discord.py/2.3.2', 'en')
     
-# Finds all files containing a certain keyword and removes them
+# Delete all files past a certain age to clear space
 def delete_all_files(directory, keyword):
+    print(f"deleting from: {directory}")
+    file_age_before_delete = 10 # in seconds
+    
     for root, dirs, files in os.walk(directory):
         for file in files:
-            if keyword in file:
+            if keyword in file and os.path.getctime(os.path.join(root, file)) < time.time() - file_age_before_delete:
                 file_path = os.path.join(root, file)
                     
                 try:
                     os.remove(file_path)
-                    print(f"Deleted: {file_path}")
+                    print(f"File deleted: {file_path}")
                 except:
                     print(f"File in use, cannot delete: {file_path}")
   
 # Configuration for yt-dlp
 ytdl_format_options = {
     'format': 'bestaudio/best',
-    'outtmpl': os.path.expanduser("~" + os.sep + "Downloads" + os.sep + "%(extractor)s-%(id)s-%(title)s.%(ext)s"),
+    'outtmpl': os.path.join(MUSIC_FOLDER, "youtube-%(id)s-%(title)s.%(ext)s"),
     'restrictfilenames': True,
     'noplaylist': True,
     'nocheckcertificate': True,
@@ -61,6 +68,11 @@ class YTDLSource(discord.PCMVolumeTransformer):
     @classmethod
     async def ytdl_search(cls, search, guild, *, loop=None, stream=False):
         search_query = search
+        
+        guild_music_folder = os.path.join(MUSIC_FOLDER, str(guild))
+        if not os.path.isdir(guild_music_folder):
+            os.mkdir(guild_music_folder)
+        
         if "https://" not in search:
             search_query = f"ytsearch{1}:{search}"
         
@@ -79,7 +91,11 @@ class YTDLSource(discord.PCMVolumeTransformer):
             data = data['entries'][0]
                      
         filename = data['url'] if stream else ytdl.prepare_filename(data)
+        # Move file to the guild's music folder
+        os.replace(filename, os.path.join(guild_music_folder, os.path.basename(filename)))
+        filename = os.path.join(guild_music_folder, os.path.basename(filename))
         print(f"File created: {filename}")
+        
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
 @bot.event
@@ -88,30 +104,37 @@ async def on_ready():
                 
 @bot.event
 async def on_voice_state_update(member, before, after):
-    global song_queue
-    
-    # Check if the bot is connected to a voice channel
-    if not member.bot and after.channel is None:
-        voice_client = discord.utils.get(bot.voice_clients, guild=member.guild)
+    try:
+        global song_queue
         
-        if voice_client and voice_client.channel == before.channel:
-            if len(before.channel.members) == 1:
-                await asyncio.sleep(10)
-                
-                # Re-check the channel members after waiting
-                if len(before.channel.members) == 1 and bot.user in before.channel.members:
-                    song_queue[before.channel.guild.id].clear()
+        if before is not None:
+            guild_music_folder = os.path.join(MUSIC_FOLDER, str(before.channel.guild.id))
+        else:
+            guild_music_folder = os.path.join(MUSIC_FOLDER, str(after.channel.guild.id))
+        
+        # If voice state updated by a user (non-bot)
+        if not member.bot:
+            print("A user joined or left vc")
+            voice_client = discord.utils.get(bot.voice_clients, guild=member.guild)
+            
+            if voice_client and voice_client.channel == before.channel:
+                # If bot is alone in channel
+                if len(before.channel.members) == 1:
+
+                    if before.channel.guild.id in song_queue:
+                        song_queue[before.channel.guild.id].clear()
+                        
                     if before.channel.guild.voice_client.is_playing():
                         voice_client.stop()
 
-                    await before.channel.guild.voice_client.disconnect()
-                    
-                    time.sleep(5)
-                    if any(bot.voice_clients) == False:
-                        delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
-                        
-                    print(f"queue: {song_queue}")
-
+                    if guild_music_folder is not None:
+                        await asyncio.sleep(2)
+                        delete_all_files(guild_music_folder, 'youtube-')
+                    await before.channel.guild.voice_client.disconnect()   
+                    print(f"Bot has left the channel. Queue: {song_queue}")
+    except Exception as e:
+        print(f"on_voice_state_update Error: {e}")
+        
 # Join & Leave voice channel
 @bot.command(name='join', help='joins the voice channel')
 async def join(ctx, channel: str = None):
@@ -134,28 +157,28 @@ async def join(ctx, channel: str = None):
             else:
                 await vc.connect()
                 
-        await ctx.send("Welcome to Penacony! What kind of song are you in the mood for now?")
+        await ctx.send("Welcome to Penacony! Use '--help' to see what I can do! Have fun!")
         print(f"Connected to channel: {vc}")
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
-        print(f"Error: {e}")
+        print(f"join Error: {e}")
 
 @bot.command(name='leave', help='leaves the voice channel')
 async def leave(ctx):
     try:
         global song_queue
+        guild_music_folder = os.path.join(MUSIC_FOLDER, str(ctx.channel.guild.id))
         
         if ctx.message.guild.voice_client.is_playing():
             await stop(ctx)
         await ctx.voice_client.disconnect()
         await ctx.send("Thank you for attending my concert, have a wonderful night~ 💕")
         
-        time.sleep(5)
-        if any(bot.voice_clients) == False:
-            delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
+        await asyncio.sleep(2)
+        delete_all_files(guild_music_folder, 'youtube-')
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
-        print(f"Error: {e}")
+        print(f"leave Error: {e}")
 
 # Music Commands     
 @bot.command(name='play', help='plays song or adds song to queue')
@@ -183,6 +206,7 @@ async def play(ctx, *search_query):
             voice_client = ctx.message.guild.voice_client
 
             if not voice_client.is_playing():
+                # Loop through the entire queue to search & play each song
                 while len(song_queue[guild]) > 0:
                     async with ctx.typing():
                         done_event = asyncio.Event()
@@ -201,22 +225,28 @@ async def play(ctx, *search_query):
                         voice_client.play(player, after=after_playback)
                         
                         await done_event.wait()
-                        delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
                         
                 # If queue is empty after current song has finished playing
                 if len(song_queue[guild]) == 0:
                     await ctx.send("*Robin has finished singing*")
                     song_queue.pop(guild)
-                    delete_all_files(os.path.expanduser("~" + os.sep + "Downloads"), 'youtube-')
                     print(f"queue: {song_queue}")
             else:
                 await ctx.send(f"I'll add this song request to the queue! **Current Queue: {len(song_queue[guild])}**")
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
-        print(f"Error: {e}")
+        print(f"play Error: {e}")
+        
+@bot.command(name='queue', help='add song to queue')
+async def queue(ctx, *search_query):
+    try:
+        await play(ctx, *search_query)
+    except Exception as e:
+        await ctx.send(f"Sorry, there is an error with my program: **{e}**")
+        print(f"queue Error: {e}")
 
-@bot.command(name='queue', help='check queue status')
-async def queue(ctx):
+@bot.command(name='showqueue', help='check queue status')
+async def showqueue(ctx):
     global song_queue
     guild = ctx.message.guild.id
     msg = "Songs in queue: \n"
@@ -228,11 +258,6 @@ async def queue(ctx):
         msg = msg + f"**{i + 1}** - {song_queue[guild][i]} \n"
         
     await ctx.send(msg)
-    
-@bot.command(name='~debugqueue')
-async def debug_queue(ctx):
-    global song_queue
-    await ctx.send(song_queue)
 
 @bot.command(name='stop', help='stops song and clears song queue')
 async def stop(ctx):
@@ -284,6 +309,7 @@ async def resume(ctx):
         await ctx.send("I'm not singing anything at the moment...")
 
 # Fun commands
+
 magic_8ball_list = [
     "It is certain.",
     "It is decidedly so.",
@@ -308,11 +334,11 @@ magic_8ball_list = [
 ]
 
 @bot.command(name='hi', help='says hi to your friend!')
-async def hi(ctx, *, name: str = None):
-    if name == None:
+async def hi(ctx, *, fname: str = None):
+    if fname == None:
         await ctx.send(f"hi, {ctx.message.author.name}!")
     else:
-        await ctx.send(f"hi, {name}!")
+        await ctx.send(f"hi, {fname}!")
     
 @bot.command(name='roll', help='rolls a die')
 async def roll(ctx):
@@ -342,7 +368,20 @@ async def wiki(ctx, *search_query):
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
         print(f"Error: {e}")  
+  
+# Debug commands
 
+'''    
+@bot.command(name='~debug_show_all_queue')
+async def debug_show_all_queue(ctx):
+    global song_queue
+    await ctx.send(song_queue)
+'''
+    
+@bot.command(name='~debug_get_guild_id')
+async def debug_get_guild_id(ctx):
+    await ctx.send(f"Your server's id: {ctx.message.guild.id}")
+    
 TOKEN = os.getenv('ROBIN_AI_DISCORD_TOKEN')
 if TOKEN: 
     bot.run(TOKEN)
