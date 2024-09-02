@@ -36,6 +36,10 @@ def delete_all_files(directory, keyword):
                     print(f"File deleted: {file_path}")
                 except:
                     print(f"File in use, cannot delete: {file_path}")
+                    
+            if len(os.listdir(directory)) == 0:
+                os.rmdir(directory)
+                print(f'Directory {directory} deleted.')
   
 # Configuration for yt-dlp
 ytdl_format_options = {
@@ -72,6 +76,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         guild_music_folder = os.path.join(MUSIC_FOLDER, str(guild))
         if not os.path.isdir(guild_music_folder):
             os.mkdir(guild_music_folder)
+            print(f"Directory created: {guild_music_folder}.")
         
         if "https://" not in search:
             search_query = f"ytsearch{1}:{search}"
