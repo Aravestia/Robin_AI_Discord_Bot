@@ -1,4 +1,6 @@
 discord.py==2.3.2
 Flask==3.0.3
+hmmlearn==0.3.2
+numpy==2.1.1
 Wikipedia_API==0.6.0
 yt_dlp==2024.8.6

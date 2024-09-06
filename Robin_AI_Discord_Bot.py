@@ -7,9 +7,13 @@ import time
 import os
 import wikipediaapi
 from flask import Flask
+import numpy as np
+from hmmlearn import hmm
+import re
 
 app = Flask(__name__)
 MUSIC_FOLDER = os.path.join(app.root_path, 'music-playing')
+LYRICS_FILE_PATH = os.path.join(app.root_path, 'training-lyrics', 'training-lyrics.txt')
 
 intents = discord.Intents.default()
 intents.message_content = True  # Enable this if you need message content intent
@@ -138,7 +142,7 @@ async def on_voice_state_update(member, before, after):
                     await before.channel.guild.voice_client.disconnect()   
                     print(f"Bot has left the channel. Queue: {song_queue}")
     except Exception as e:
-        print(f"on_voice_state_update Error: {e}")
+        print(f"on_voice_state_update Error: {e}")   
         
 # Join & Leave voice channel
 @bot.command(name='join', help='joins the voice channel')
@@ -401,17 +405,88 @@ async def wiki(ctx, *search_query):
         page = wikipedia.page("_".join(search_query))
         
         await ctx.send("**Dan Heng:** *I'll take a look in the archives📖.*")
-        try:
-            if page.exists():
-                await ctx.send(f"{page.summary[0:1000]}... \n\n**Dan Heng:** *Let me know if you need any more help.*")
-            else:
-                await ctx.send("**Dan Heng:** *Sorry, I could not find any info on that topic...*")
-        except Exception as e:
-            await ctx.send(f"Sorry, there is an error with my program: **{e}**")
-            print(f"Error: {e}")
+        if page.exists():
+            await ctx.send(f"{page.summary[0:1000]}... \n\n**Dan Heng:** *Let me know if you need any more help.*")
+        else:
+            await ctx.send("**Dan Heng:** *Sorry, I could not find any info on that topic...*")
+
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
         print(f"wiki Error: {e}")
+
+n_components_ = 1  # Number of hidden states
+n_mix_ = 10
+model = hmm.GMMHMM(n_components=n_components_, n_mix=n_mix_, n_iter=1000, tol=1e-2)
+       
+@bot.command(name='write-lyrics', help='AI Generated lyrics')
+async def write_lyrics(ctx):
+    try:
+        global model
+        await ctx.send("*Robin is coming up with lyrics...*")
+        
+        def tokenize_and_tag(file_path):
+            # Regular expression pattern to include punctuation as separate tokens
+            pattern = r"\s+"
+
+            with open(file_path, 'r', encoding='utf-8') as file:
+                lines = file.readlines()
+
+            # Create a list of sentences, each sentence is a list of words and punctuation
+            sentences = [re.split(pattern, line.strip()) for line in lines if line.strip()]
+            for sentence in sentences:
+                sentence = [s.lower() for s in sentence]
+            
+            # Create a dictionary to map each unique word to a unique number
+            word_to_number = {}
+            current_number = 1
+            
+            for sentence in sentences:
+                for word in sentence:
+                    if word not in word_to_number:
+                        word_to_number[word] = current_number
+                        current_number += 1
+            
+            # Replace words with their corresponding numbers
+            tagged_sentences = [[word_to_number[word] for word in sentence] for sentence in sentences]
+            
+            return tagged_sentences, word_to_number
+        
+        # Get training lyrics
+        dialogue_data, word_to_number = tokenize_and_tag(LYRICS_FILE_PATH)
+
+        # Convert to 2D array and concatenate the dialogues (required for hmmlearn)
+        lengths = [len(seq) for seq in dialogue_data]
+        X = np.concatenate([np.array(seq).reshape(-1, 1) for seq in dialogue_data])
+
+        # Train the model on the dialogue data
+        model.fit(X, lengths)
+        
+        # Generate a sequence from the trained model
+        def generate_lyrics(lyrics_length):
+            generated_sequence, _ = model.sample(lyrics_length)
+            print(generated_sequence.flatten())
+
+            generated_sequence_words = []
+            for wordarr in generated_sequence:
+                for word in wordarr:
+                    w = int(word)
+                    if w > 0:
+                        while w not in word_to_number.values():
+                            w = w - 1
+                        
+                        generated_sequence_words.append(list(word_to_number.keys())[list(word_to_number.values()).index(w)])
+
+            return re.sub(r'([.!?])\s*(\w)', lambda m: m.group(1) + ' ' + m.group(2).upper(), re.sub(r'\b(i)\b', 'I', re.sub(r'(?<=[a-zA-Z]) (?=[\.,;!?])', '', ' '.join(generated_sequence_words)).capitalize()))
+        
+        # Send lyrics
+        await ctx.send("════*.·:·.✧ ✦ ✧.·:·.*════")
+        for i in range(random.randint(3,7)):
+            await ctx.send(generate_lyrics(random.randint(3, 12)))
+        await ctx.send("════*.·:·.✧ ✦ ✧.·:·.*════")
+        
+    except Exception as e:
+        await ctx.send(f"Sorry, there is an error with my program: **{e}**")
+        print(f"write-lyrics Error: {e}")
   
 # Debug commands
 
