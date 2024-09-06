@@ -480,7 +480,7 @@ async def write_lyrics(ctx):
         
         # Send lyrics
         await ctx.send("════*.·:·.✧ ✦ ✧.·:·.*════")
-        for i in range(random.randint(3,7)):
+        for i in range(random.randint(4,7)):
             await ctx.send(generate_lyrics(random.randint(3, 12)))
         await ctx.send("════*.·:·.✧ ✦ ✧.·:·.*════")
         
