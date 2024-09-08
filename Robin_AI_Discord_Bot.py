@@ -506,8 +506,10 @@ async def debug_get_guild_id(ctx):
         print(f"~debug_get_guild_id Error: {e}")
     
 TOKEN = os.getenv('ROBIN_AI_DISCORD_TOKEN')
-if TOKEN: 
-    bot.run(TOKEN)
-else:
-    print("Error: TOKEN not found. Make sure env is ROBIN_AI_DISCORD_TOKEN")
+
+if __name__ == "__main__":
+    if TOKEN: 
+        bot.run(TOKEN)
+    else:
+        print("Error: TOKEN not found. Make sure env is ROBIN_AI_DISCORD_TOKEN")
 
