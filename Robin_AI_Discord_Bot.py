@@ -368,10 +368,10 @@ magic_8ball_list = [
 @bot.command(name='hi', help='says hi to your friend!')
 async def hi(ctx, *, fname: str = None):
     try:
-        if fname == None:
-            await ctx.send(f"hi, {ctx.message.author.name}!")
-        else:
+        if fname:
             await ctx.send(f"hi, {fname}!")
+        else:
+            await ctx.send(f"hi, {ctx.message.author.name}!")
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
         print(f"hi Error: {e}")
@@ -390,7 +390,7 @@ async def roll(ctx):
 @bot.command(name='8ball', help='asks magic 8 ball a question')
 async def magic_8ball(ctx, *, qn: str = None):
     try:
-        if qn is not None:
+        if qn:
             r = random.randint(0, 19)
             await ctx.send(f"*{magic_8ball_list[r]}*")
         else:
@@ -487,6 +487,17 @@ async def write_lyrics(ctx):
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
         print(f"write-lyrics Error: {e}")
+
+@bot.command(name='fat', help='yo momma fat jokes')
+async def fat(ctx, *, fname: str = None):
+    try:
+        if fname:
+            await ctx.send(f"{fname}, yo momma so FAT, that when she went to the beach, a whale swam up and sang, 'We are family~'")
+        else:
+            await ctx.send(f"Yo momma so FAT, that when she went to the beach, a whale swam up and sang, 'We are family~'")
+    except Exception as e:
+        await ctx.send(f"Sorry, there is an error with my program: **{e}**")
+        print(f"fat Error: {e}")
   
 # Debug commands
 
