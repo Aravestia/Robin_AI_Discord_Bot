@@ -8,8 +8,7 @@ import os
 import wikipediaapi
 from flask import Flask
 import numpy as np
-from hmmlearn import hmm
-import re
+import ollama
 
 app = Flask(__name__)
 MUSIC_FOLDER = os.path.join(app.root_path, 'music-playing')
@@ -23,6 +22,8 @@ intents.members = True  # Enable this if you need server members intent
 
 bot = commands.Bot(command_prefix='--', intents=intents)
 song_queue = dict()
+deepseek_conversations = dict()
+deepseek_default_script = 'Hi! Please answer this prompt as "Robin", a songstress famous throughout the galaxy! You are kind, gentle and charismatic, always willing to lend a helping hand to anyone in need! Your hometown is Penacony, a planet of festivities and dreams, which has influenced your passion for singing!\n\n'
 wikipedia = wikipediaapi.Wikipedia('Robin_AI_Discord_Bot (https://github.com/Aravestia/Robin_AI_Discord_Bot) discord.py/2.3.2', 'en')
     
 # Delete all files past a certain age to clear space
@@ -414,80 +415,6 @@ async def wiki(ctx, *search_query):
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
         print(f"wiki Error: {e}")
 
-n_components_ = 1  # Number of hidden states
-n_mix_ = 10
-model = hmm.GMMHMM(n_components=n_components_, n_mix=n_mix_, n_iter=1000, tol=1e-2)
-       
-@bot.command(name='write-lyrics', help='AI Generated lyrics')
-async def write_lyrics(ctx):
-    try:
-        global model
-        await ctx.send("*Robin is coming up with lyrics...*")
-        
-        def tokenize_and_tag(file_path):
-            # Regular expression pattern to include punctuation as separate tokens
-            pattern = r"\s+"
-
-            with open(file_path, 'r', encoding='utf-8') as file:
-                lines = file.readlines()
-
-            # Create a list of sentences, each sentence is a list of words and punctuation
-            sentences = [re.split(pattern, line.strip()) for line in lines if line.strip()]
-            for sentence in sentences:
-                sentence = [s.lower() for s in sentence]
-            
-            # Create a dictionary to map each unique word to a unique number
-            word_to_number = {}
-            current_number = 1
-            
-            for sentence in sentences:
-                for word in sentence:
-                    if word not in word_to_number:
-                        word_to_number[word] = current_number
-                        current_number += 1
-            
-            # Replace words with their corresponding numbers
-            tagged_sentences = [[word_to_number[word] for word in sentence] for sentence in sentences]
-            
-            return tagged_sentences, word_to_number
-        
-        # Get training lyrics
-        dialogue_data, word_to_number = tokenize_and_tag(LYRICS_FILE_PATH)
-
-        # Convert to 2D array and concatenate the dialogues (required for hmmlearn)
-        lengths = [len(seq) for seq in dialogue_data]
-        X = np.concatenate([np.array(seq).reshape(-1, 1) for seq in dialogue_data])
-
-        # Train the model on the dialogue data
-        model.fit(X, lengths)
-        
-        # Generate a sequence from the trained model
-        def generate_lyrics(lyrics_length):
-            generated_sequence, _ = model.sample(lyrics_length)
-            print(generated_sequence.flatten())
-
-            generated_sequence_words = []
-            for wordarr in generated_sequence:
-                for word in wordarr:
-                    w = int(word)
-                    if w > 0:
-                        while w not in word_to_number.values():
-                            w = w - 1
-                        
-                        generated_sequence_words.append(list(word_to_number.keys())[list(word_to_number.values()).index(w)])
-
-            return re.sub(r'([.!?])\s*(\w)', lambda m: m.group(1) + ' ' + m.group(2).upper(), re.sub(r'\b(i)\b', 'I', re.sub(r'(?<=[a-zA-Z]) (?=[\.,;!?])', '', ' '.join(generated_sequence_words)).capitalize()))
-        
-        # Send lyrics
-        await ctx.send("════*.·:·.✧ ✦ ✧.·:·.*════")
-        for i in range(random.randint(4,7)):
-            await ctx.send(generate_lyrics(random.randint(3, 12)))
-        await ctx.send("════*.·:·.✧ ✦ ✧.·:·.*════")
-        
-    except Exception as e:
-        await ctx.send(f"Sorry, there is an error with my program: **{e}**")
-        print(f"write-lyrics Error: {e}")
-
 @bot.command(name='fat', help='yo momma fat jokes')
 async def fat(ctx, *, fname: str = None):
     try:
@@ -498,7 +425,46 @@ async def fat(ctx, *, fname: str = None):
     except Exception as e:
         await ctx.send(f"Sorry, there is an error with my program: **{e}**")
         print(f"fat Error: {e}")
-  
+
+def format_history(history):
+    """
+    Convert conversation history into a single string.
+    """
+    formatted_history = ""
+    for message in history:
+        formatted_history += f"{message['role']}: {message['content']}\n"
+    return formatted_history
+       
+@bot.command(name='chat', help='chat with Robin AI!')
+async def chat(ctx, *prompt):
+    try:
+        guild = ctx.message.guild.id
+        client = ollama.AsyncClient(host="http://localhost:11434")
+        msg = " ".join(prompt)
+        model = 'deepseek-r1:8b'
+        await ctx.send("*Robin is thinking...*")
+        
+        if guild in deepseek_conversations:
+            deepseek_conversations[guild].append({"role": "user", "content": deepseek_default_script + msg})
+        else:
+            deepseek_conversations[guild] = [{"role": "user", "content": deepseek_default_script + msg}]
+        
+        print(deepseek_conversations[guild])
+        res = await client.chat(
+            model=model,
+            messages=deepseek_conversations[guild]
+        )
+        print(res['message']['content'])
+        deepseek_conversations[guild].append({"role": "assistant", "content": res['message']['content']})
+        
+        if len(deepseek_conversations[guild]) > 5:
+            deepseek_conversations[guild] = deepseek_conversations[-5:]
+        
+        await ctx.send(res['message']['content'][res['message']['content'].find("</think>"):][10:1900])
+    except Exception as e:
+        await ctx.send(f"Sorry, there is an error with my program: **{e}**")
+        print(f"chat Error: {e}")       
+          
 # Debug commands
 
 '''    
